@@ -69,14 +69,6 @@ exports.decorateTerm = (Term, {React}) => {
             return;
           }
           this.canvas.addEventListener('mousemove', this._onMouseMove, false);
-          this.canvas.addEventListener(
-            'wheel',
-            ev => {
-              if (ev.deltaY === 0) return;
-              if (callback) callback();
-            },
-            false
-          );
         }
         const iterator = buffer.iterator(false, buffer.ydisp, rows + 1);
         while (iterator.hasNext()) {
@@ -166,9 +158,13 @@ exports.decorateTerm = (Term, {React}) => {
       if (this.props.onDecorated) this.props.onDecorated(term);
       if (term && term.term && term.term._core) {
         this.term = term.term._core;
-        this.term.on('scroll', () => {
-          if (callback) callback();
-        });
+        this.term.viewport._viewportElement.addEventListener(
+          'scroll',
+          () => {
+            if (callback) callback();
+          },
+          false
+        );
       }
     }
     _onCursorMove(cursorFrame) {
