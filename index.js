@@ -17,14 +17,16 @@ const hashFragmentClause = '(#' + queryStringHashFragmentCharacterSet + ')?';
 const bodyClause = hostClause + pathClause + queryStringClause + hashFragmentClause;
 const regex = new RegExp(protocolClause + bodyClause, 'g');
 
-var callback = null;
-
+var callback = {};
+var currentUid = null;
 exports.middleware = () => next => action => {
   // Just to trigger refresh/rescan when there's any output from terminal
-  if (action.type === 'SESSION_ADD_DATA') {
-    if (callback) {
-      callback();
+  if (action.type === 'SESSION_ADD_DATA' || action.type === 'SESSION_SET_ACTIVE') {
+    if (currentUid && callback[currentUid]) {
+      callback[currentUid]();
     }
+  } else if (action.type === 'SESSION_SET_ACTIVE' || action.type === 'SESSION_ADD') {
+    currentUid = action.uid;
   }
   next(action);
 };
@@ -37,6 +39,7 @@ exports.decorateTerm = (Term, {React}) => {
       this._onDecorated = this._onDecorated.bind(this);
       this._onMouseMove = this._onMouseMove.bind(this);
       this._onChange = this._onChange.bind(this);
+      this.embed = null;
       this.term = null;
       this.ctx = null;
       this.height = null;
@@ -46,30 +49,30 @@ exports.decorateTerm = (Term, {React}) => {
       this.collected = [];
     }
     componentDidMount() {
-      let embed = document.getElementById('preview-window');
+      let embed = this.embed;
       embed.addEventListener('load-commit', () => {
         embed.setZoomFactor(0.3);
         embed.insertCSS('html,body{ overflow: hidden !important;}');
       });
-      if (callback) return;
-      callback = this._onChange;
+      callback[this.props.uid] = this._onChange;
     }
     _onChange() {
       if (this.term) {
         const {buffer, rows, cols} = this.term;
         let collected = [];
-        if (!this.canvas) {
-          let screen = document.getElementsByClassName('xterm-screen')[0];
-          this.canvas = screen.childNodes[2];
-          if (this.canvas.getContext) {
-            this.ctx = this.canvas.getContext('2d');
-            this.ctx.font = '' + this.props.fontSize + 'px ' + this.props.fontFamily;
-            this.ctx.fillStyle = this.props.foregroundColor;
-          } else {
-            return;
-          }
-          this.canvas.addEventListener('mousemove', this._onMouseMove, false);
+        if (this.canvas) {
+          this.canvas.removeEventListener('mousemove', this._onMouseMove, false);
         }
+        let screen = this.term.screenElement;
+        this.canvas = screen.childNodes[2];
+        if (this.canvas.getContext) {
+          this.ctx = this.canvas.getContext('2d');
+          this.ctx.font = '' + this.props.fontSize + 'px ' + this.props.fontFamily;
+          this.ctx.fillStyle = this.props.foregroundColor;
+        } else {
+          return;
+        }
+        this.canvas.addEventListener('mousemove', this._onMouseMove, false);
         const iterator = buffer.iterator(false, buffer.ydisp, rows + 1);
         while (iterator.hasNext()) {
           const lineData = iterator.next();
@@ -107,7 +110,8 @@ exports.decorateTerm = (Term, {React}) => {
       }
     }
     _onMouseMove(ev) {
-      let embed = document.getElementById('preview-window');
+      if (!this.embed) return;
+      let embed = this.embed;
       if (this.term === null) {
         embed.style.display = 'none';
         //embed.src = "";
@@ -161,7 +165,7 @@ exports.decorateTerm = (Term, {React}) => {
         this.term.viewport._viewportElement.addEventListener(
           'scroll',
           () => {
-            if (callback) callback();
+            if (callback[this.props.uid]) callback[this.props.uid]();
           },
           false
         );
@@ -179,8 +183,10 @@ exports.decorateTerm = (Term, {React}) => {
         {style},
         React.createElement('webview', {
           name: 'preview-disable-x-frame-options',
-          id: 'preview-window',
           src: this.dataInView,
+          ref: input => {
+            this.embed = input;
+          },
           style: {
             borderRadius: '3px',
             width: '200px',
