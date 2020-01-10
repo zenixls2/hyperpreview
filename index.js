@@ -21,12 +21,17 @@ var callback = {};
 var currentUid = null;
 exports.middleware = () => next => action => {
   // Just to trigger refresh/rescan when there's any output from terminal
-  if (action.type === 'SESSION_ADD_DATA' || action.type === 'SESSION_SET_ACTIVE') {
+  if (action.type === 'SESSION_ADD_DATA') {
     if (currentUid && callback[currentUid]) {
       callback[currentUid]();
     }
   } else if (action.type === 'SESSION_SET_ACTIVE' || action.type === 'SESSION_ADD') {
     currentUid = action.uid;
+    if (currentUid && callback[currentUid]) {
+      callback[currentUid]();
+    }
+  } else if (action.type === 'SESSION_PTY_EXIT') {
+    delete callback[action.uid];
   }
   next(action);
 };
@@ -42,8 +47,6 @@ exports.decorateTerm = (Term, {React}) => {
       this.embed = null;
       this.term = null;
       this.ctx = null;
-      this.height = null;
-      this.width = null;
       this.canvas = null;
       this.dataInView = '';
       this.collected = [];
@@ -126,32 +129,32 @@ exports.decorateTerm = (Term, {React}) => {
       }
       const x = coords[0];
       const y = coords[1];
-      if (this.height && this.width) {
-        for (let item of this.collected) {
-          if (item.y1 === item.y2) {
-            // Single line link
-            if (item.y1 === y && x >= item.x1 && x <= item.x2) {
-              if (this.dataInView !== item.data) {
-                this.dataInView = item.data;
-                embed.src = item.data;
-              }
-              embed.style.display = 'block';
-              embed.style.left = item.x2 * this.width + 'px';
-              embed.style.top = item.y2 * this.height + 'px';
-              return;
+      const height = this.term.viewport._charMeasure.height;
+      const width = this.term.viewport._charMeasure.width;
+      for (let item of this.collected) {
+        if (item.y1 === item.y2) {
+          // Single line link
+          if (item.y1 === y && x >= item.x1 && x <= item.x2) {
+            if (this.dataInView !== item.data) {
+              this.dataInView = item.data;
+              embed.src = item.data;
             }
-          } else {
-            // Multi-line link
-            if ((y == item.y1 && x >= item.x1) || (y == item.y2 && x <= item.x2) || (y > item.y1 && y < item.y2)) {
-              if (this.dataInView !== item.data) {
-                this.dataInView = item.data;
-                embed.src = item.data;
-              }
-              embed.style.display = 'block';
-              embed.style.left = item.x2 * this.width + 'px';
-              embed.style.top = item.y2 * this.height + 'px';
-              return;
+            embed.style.display = 'block';
+            embed.style.left = item.x2 * width + 'px';
+            embed.style.top = item.y2 * height + 'px';
+            return;
+          }
+        } else {
+          // Multi-line link
+          if ((y == item.y1 && x >= item.x1) || (y == item.y2 && x <= item.x2) || (y > item.y1 && y < item.y2)) {
+            if (this.dataInView !== item.data) {
+              this.dataInView = item.data;
+              embed.src = item.data;
             }
+            embed.style.display = 'block';
+            embed.style.left = item.x2 * width + 'px';
+            embed.style.top = item.y2 * height + 'px';
+            return;
           }
         }
       }
@@ -170,11 +173,6 @@ exports.decorateTerm = (Term, {React}) => {
           false
         );
       }
-    }
-    _onCursorMove(cursorFrame) {
-      if (this.props.onCursorMove) this.props.onCursorMove(cursorFrame);
-      this.height = cursorFrame.height;
-      this.width = cursorFrame.width;
     }
     render() {
       const style = Object.assign({}, this.props.style || {}, {height: '100%'});
@@ -201,8 +199,7 @@ exports.decorateTerm = (Term, {React}) => {
         React.createElement(
           Term,
           Object.assign({}, this.props, {
-            onDecorated: this._onDecorated,
-            onCursorMove: this._onCursorMove
+            onDecorated: this._onDecorated
           })
         )
       );
