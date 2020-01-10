@@ -58,16 +58,26 @@ exports.decorateTerm = (Term, {React}) => {
       if (this.term) {
         const {buffer, rows, cols} = this.term;
         let collected = [];
-        let screen = document.getElementsByClassName('xterm-screen')[0];
-        this.canvas = screen.childNodes[2];
-        if (this.canvas.getContext) {
-          this.ctx = this.canvas.getContext('2d');
-          this.ctx.font = '' + this.props.fontSize + 'px ' + this.props.fontFamily;
-          this.ctx.fillStyle = this.props.foregroundColor;
-        } else {
-          return;
+        if (!this.canvas) {
+          let screen = document.getElementsByClassName('xterm-screen')[0];
+          this.canvas = screen.childNodes[2];
+          if (this.canvas.getContext) {
+            this.ctx = this.canvas.getContext('2d');
+            this.ctx.font = '' + this.props.fontSize + 'px ' + this.props.fontFamily;
+            this.ctx.fillStyle = this.props.foregroundColor;
+          } else {
+            return;
+          }
+          this.canvas.addEventListener('mousemove', this._onMouseMove, false);
+          this.canvas.addEventListener(
+            'wheel',
+            ev => {
+              if (ev.deltaY === 0) return;
+              if (callback) callback();
+            },
+            false
+          );
         }
-        this.canvas.addEventListener('mousemove', this._onMouseMove, false);
         const iterator = buffer.iterator(false, buffer.ydisp, rows + 1);
         while (iterator.hasNext()) {
           const lineData = iterator.next();
@@ -156,6 +166,9 @@ exports.decorateTerm = (Term, {React}) => {
       if (this.props.onDecorated) this.props.onDecorated(term);
       if (term && term.term && term.term._core) {
         this.term = term.term._core;
+        this.term.on('scroll', () => {
+          if (callback) callback();
+        });
       }
     }
     _onCursorMove(cursorFrame) {
