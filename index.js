@@ -40,7 +40,6 @@ exports.decorateTerm = (Term, {React}) => {
   return class extends React.Component {
     constructor(props, context) {
       super(props, context);
-      this._onCursorMove = this._onCursorMove.bind(this);
       this._onDecorated = this._onDecorated.bind(this);
       this._onMouseMove = this._onMouseMove.bind(this);
       this._onChange = this._onChange.bind(this);
