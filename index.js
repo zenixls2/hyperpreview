@@ -66,7 +66,16 @@ exports.decorateTerm = (Term, {React}) => {
           this.canvas.removeEventListener('mousemove', this._onMouseMove, false);
         }
         let screen = this.term.screenElement;
-        this.canvas = screen.childNodes[2];
+        lb: {
+          for (let canvas of screen.childNodes) {
+            for (let cls of canvas.classList) {
+              if (cls === 'xterm-cursor-layer') {
+                this.canvas = canvas;
+                break lb;
+              }
+            }
+          }
+        }
         if (this.canvas.getContext) {
           this.ctx = this.canvas.getContext('2d');
           this.ctx.font = '' + this.props.fontSize + 'px ' + this.props.fontFamily;
